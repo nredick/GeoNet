@@ -1,7 +1,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-# GeoNet
-GeoNet: User-friendly tool for processing geospatial data with U-Net
+# Geospatial U-Net
+User-friendly tool for processing geospatial data with U-Net
 
 # Installation
 
