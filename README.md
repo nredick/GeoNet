@@ -1,3 +1,5 @@
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 # GeoNet
 GeoNet: User-friendly tool for processing geospatial data with U-Net
 
@@ -48,7 +50,7 @@ source myenv/bin/activate # Mac/Linux
 ```
 
 ### Using Anaconda
-*Alternatively, you can use Anaconda to create a virtual environment. You can download Anaconda [here](https://www.anaconda.com/products/distribution) or install it with a software manager.*
+*You can download Anaconda [here](https://www.anaconda.com/products/distribution) or install it with a software manager.*
 >This is the recommended method for Windows users.
 
 ```
@@ -69,4 +71,6 @@ Next, install the required packages by running the following command.
 pip3 install -r requirements.txt
 ```
 
-# Usage
+<!-- # Usage -->
+
+
