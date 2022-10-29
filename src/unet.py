@@ -35,6 +35,7 @@ from keras import backend as K
 import ipywidgets as widgets
 from keras import backend as K
 import tensorflow as tf
+from IPython.display import clear_output
 
 
 # %% [markdown]
@@ -147,6 +148,8 @@ TILE_SIZE = int(select_tile_size.value)
 # %% [markdown]
 # ## Optional: Data Augmentation
 #
+# add a click to move to next section button/link
+#
 # > Defaults to `True`
 #
 # ### What is data augmentation?
@@ -154,10 +157,131 @@ TILE_SIZE = int(select_tile_size.value)
 # ### What kind of data augmentation should I use?
 
 # %%
-chkboxes = widgets.Checkbox(
-    value=False,
-    description='Check me',
-    disabled=False,
-    indent=False
+options = ['Rotation', 'Horizontal Flip', 'Vertical Flip', 'etc.']
+
+data_aug_types = widgets.SelectMultiple(
+    options=options,
+    # value=['None'],
+    rows=len(options),
+    description='Select:',
+    disabled=False
 )
-chkboxes
+
+data_aug_types
+
+# %%
+if len(data_aug_types.value) == 0:
+    print('No data augmentation methods selected.')
+else: 
+    for i in data_aug_types.value:
+        print(i)
+        # todo apply method 
+
+# %% [markdown]
+# # Data Visualization
+#
+# Check to make sure things look good visually
+
+# %% [markdown]
+# # Split Data into Training, Validation, & Test Sets
+#
+# ## Select training set size
+
+# %%
+train_size = widgets.FloatSlider(
+    value=.80,
+    min=0.01,
+    max=1.0,
+    step=0.01,
+    description='Train:',
+    disabled=False,
+    continuous_update=True,
+    # orientation='vertical',
+    readout=True,
+    readout_format='.2f',
+)
+
+train_size
+
+# %%
+TRAIN_SIZE = train_size.value
+if TRAIN_SIZE < 0.50:
+    print('Warning! Training size is less than 40%, this may result in poor model performance.')
+
+# %% [markdown]
+# ## Select validation set size
+
+# %%
+validation_size = widgets.FloatSlider(
+    value=.10,
+    min=0.00,
+    max=1.1-TRAIN_SIZE,
+    step=0.01,
+    description='Validation:',
+    disabled=False,
+    continuous_update=True,
+    # orientation='vertical',
+    readout=True,
+    readout_format='.2f',
+)
+
+validation_size
+
+# %%
+VALIDATION_SIZE = validation_size.value
+
+# %% [markdown]
+# ## Select test set size
+
+# %%
+test_size = widgets.FloatSlider(
+    value=.10,
+    min=0.00,
+    max=1.1-TRAIN_SIZE-VALIDATION_SIZE,
+    step=0.01,
+    description='Test:',
+    disabled=False,
+    continuous_update=True,
+    # orientation='vertical',
+    readout=True,
+    readout_format='.2f',
+)
+
+test_size
+
+# %%
+TRAIN_SIZE = train_size.value
+VALIDATION_SIZE = validation_size.value
+TEST_SIZE = test_size.value
+
+try: 
+    assert TRAIN_SIZE + VALIDATION_SIZE + TEST_SIZE == 1.0
+except AssertionError:
+    print('Error! Train, validation, and test sizes do not add up to 1.0. Please adjust the sliders and rerun this cell.')
+
+# %%
+# todo train test split 
+
+# %% [markdown]
+# # Train the Model
+#
+#
+
+# %% [markdown]
+# # Results
+#
+# ## Visualize Results
+
+# %% [markdown]
+# ## Calculate Performance Metrics
+
+# %% [markdown]
+# ## Interpret Results
+
+# %% [markdown]
+# # Export Model
+#
+# ## Optional: Generate Report
+
+# %% [markdown]
+# ## Optional: Create Tensorboard Report
