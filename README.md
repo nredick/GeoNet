@@ -2,8 +2,7 @@
 
 # Coming Soon!
 
-Geospatial U-Net
-User-friendly tool for processing geospatial data with U-Net
+An interactive, no-code tool for processing geospatial data with U-Net
 
 # Installation
 
