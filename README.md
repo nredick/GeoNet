@@ -1,6 +1,8 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-# Geospatial U-Net
+# Coming Soon!
+
+Geospatial U-Net
 User-friendly tool for processing geospatial data with U-Net
 
 # Installation
@@ -70,7 +72,5 @@ Next, install the required packages by running the following command.
 ```
 pip3 install -r requirements.txt
 ```
-
-<!-- # Usage -->
 
 
