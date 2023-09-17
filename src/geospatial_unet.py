@@ -54,6 +54,9 @@ import imgaug as ia
 import ipywidgets as widgets
 import matplotlib.pyplot as plt
 import numpy as np
+
+# from osgeo import gdal
+import rasterio
 import rasterio as rio
 import spectral
 import tensorflow as tf
@@ -65,7 +68,6 @@ from keras.layers import *
 from keras.models import *
 from keras.optimizers import *
 from keras_spatial import SpatialDataGenerator
-from osgeo import gdal
 from rasterio import windows
 from rasterio.enums import Resampling
 from rasterio.features import rasterize
@@ -380,7 +382,7 @@ for f in add_features.value.split(","):
 # ## Set the No Data Value
 
 # %%
-select_nodata = widgets.IntText(value=-1, description="no_data:", disabled=False)
+select_nodata = widgets.IntText(value=65535, description="no_data:", disabled=False)
 
 select_nodata
 
@@ -755,21 +757,32 @@ for feature_path in feature_paths:
 
 # %%
 # make sure all rasters are the same resolution & have x & y dims divisible by 2
-for raster in tqdm([mask_path, *band_paths]):
-    r = gdal.Open(raster)
-    gdal.Warp(
-        raster,
-        r,
-        xRes=PIXEL_SIZE,
-        yRes=PIXEL_SIZE,
-        resampleAlg="bilinear",
-        multithread=True,
-        copyMetadata=True,
-        targetAlignedPixels=True,
-        outputBounds=total_bounds,
-        srcNodata=NO_DATA,
-        dstNodata=NO_DATA,
-    )
+with rasterio.open(mask_path) as mask_ds:
+    # Loop through the band rasters
+    for band_path in tqdm(band_paths):
+        with rasterio.open(band_path) as band_ds:
+            # Reproject and resample the band raster to match the mask
+            with rasterio.open(
+                band_path,
+                "w",
+                driver="GTiff",
+                height=mask_ds.height,
+                width=mask_ds.width,
+                count=band_ds.count,
+                dtype=band_ds.dtypes[0],
+                crs=mask_ds.crs,
+                transform=mask_ds.transform,
+                nodata=NO_DATA,
+            ) as band_reprojected:
+                reproject(
+                    source=rasterio.band(band_ds, 1),
+                    destination=rasterio.band(band_reprojected, 1),
+                    src_transform=band_ds.transform,
+                    src_crs=band_ds.crs,
+                    dst_transform=mask_ds.transform,
+                    dst_crs=mask_ds.crs,
+                    resampling=Resampling.bilinear,
+                )
 
 # crop to bounds and save to working directory
 band_paths_list = es.crop_all(

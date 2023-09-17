@@ -12,7 +12,7 @@ If you are using Windows, ensure you are running these commands in either the An
 ## Clone the repository
 
 ```
-git clone https://github.com/nredick/GeoNet.git
+git clone https://github.com/nredick/geospatial-unet.git
 ```
 
 Alternatively, you can download the repository as a zip file and extract it using the green Code button. You can also open the repository in GitHub Desktop.
@@ -20,20 +20,22 @@ Alternatively, you can download the repository as a zip file and extract it usin
 ### Navigate to the repository
 
 ```
-cd path/to/GeoNet
+cd path/to/geospatial-unet
 ```
 ## Check your Python version
 
-Ensure that you are running Python 3.6 or higher. You can check your Python version by running:
+Ensure that you are running Python 3.10 or higher. You can check your Python version by running:
 ```
 python3 --version
 ```
+
+This project was developed using Python 3.11
 
 > *You can download the latest python version [here](https://www.python.org/downloads/) or by using a software manager like [Homebrew](https://docs.brew.sh/Installation) (Mac/Linux) or [Chocolately](https://chocolatey.org/why-chocolatey) (Windows).*
 
 ## Create a virtual environment (optional)
 
-It is recommended to create a virtual environment to install GeoNet. This will ensure that the dependencies for GeoNet do not interfere with other Python packages you may have installed. You can create a virtual environment using the steps below.
+It is recommended to create a virtual environment to install geospatial-unet. This will ensure that the dependencies for geospatial-unet do not interfere with other Python packages you may have installed. You can create a virtual environment using the steps below.
 
 *Replace `myenv` with whatever you want to call your virtual environment.*
 
