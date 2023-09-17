@@ -8,7 +8,7 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.11.2
+#       jupytext_version: 1.15.2
 #   kernelspec:
 #     display_name: Python 3 (ipykernel)
 #     language: python
@@ -16,28 +16,23 @@
 # ---
 
 # %% [markdown]
-# # **Geos.pathatial Analysis with Machine Learning**
+# # **Geospatial Analysis with Machine Learning**
 #
-
 # %% [markdown]
 # # Imports & Environment Settings
 #
-
 # %% [markdown]
 # ## Imports
 #
 # <!-- _You may see a message about regarding the use of a Tensorflow binary that is optimized with oneAPI Deep Neural Network Library (oneDNN). There is nothing wrong and it can be safely ignored._ -->
 #
-# Run the following cell to install and import neccessary libraries for this workflow. A temporary directory is created to store the data and model files. 
+# Run the following cell to install and import neccessary libraries for this workflow. A temporary directory is created to store the data and model files.
 #
 # > Please note that if you rerun this cell, the temporary directory will be deleted and recreated. If you want to keep the data and model files, please copy them to a permanent location before rerunning this cell.
 #
-
 # %%
 # import libraries & create a temporary working directory in current folder
-
 # # !pip install --quiet contextily earthpy fiona geopandas rasterio pyproj keras-spatial spectral
-
 import itertools
 import os
 import pathlib
@@ -62,7 +57,6 @@ import numpy as np
 import rasterio as rio
 import spectral
 import tensorflow as tf
-# import tensorflow_addons as tfa
 import torch
 from imgaug import augmenters as iaa
 from keras import backend as K
@@ -80,6 +74,8 @@ from shapely.geometry import box
 from sklearn import preprocessing
 from sklearn.model_selection import train_test_split
 from tqdm import tqdm
+
+# import tensorflow_addons as tfa
 
 # %%
 START_TIME = time.time()
@@ -156,7 +152,9 @@ def encode(data_path, feature):
 def get_windows(window_shape, image_shape):
     win_rows, win_cols = window_shape
     img_rows, img_cols = image_shape
-    offsets = itertools.product(range(0, img_cols, win_cols), range(0, img_rows, win_rows))
+    offsets = itertools.product(
+        range(0, img_cols, win_cols), range(0, img_rows, win_rows)
+    )
     image_window = windows.Window(col_off=0, row_off=0, width=img_cols, height=img_rows)
 
     for col_off, row_off in offsets:
@@ -331,7 +329,7 @@ torch.manual_seed(SEED)
 #
 # A mask defines the output the model learns to predict. For example, if you want to predict the land cover of a region, the masks would be polygons representing the land cover types.
 #
-# As of right now, this workflow only supports the ability to predict a single mask. 
+# As of right now, this workflow only supports the ability to predict a single mask.
 #
 # You can only upload a single **vector** file.
 
@@ -391,7 +389,7 @@ select_nodata
 #
 
 # %% [markdown]
-# Input data does not all need to have the same CRS, it will be reprojected to the CRS selected here. The CRS of your mask input will be set to the default value. 
+# Input data does not all need to have the same CRS, it will be reprojected to the CRS selected here. The CRS of your mask input will be set to the default value.
 #
 # This workflow can use any CRS accepted by the function [`pyproj.CRS.from_user_input()`](https://geopandas.org/en/stable/docs/user_guide/projections.html):
 #
@@ -441,7 +439,7 @@ select_crs
 # ## Reproject Data
 
 # %% [markdown]
-# If *necessary*, each of the input features and the mask will be reprojected to the CRS selected above. 
+# If *necessary*, each of the input features and the mask will be reprojected to the CRS selected above.
 #
 # If the following cell fails to run, try rerunning the cell. If you are still having issues, you may be using an incompatible CRS for your data.
 
@@ -480,11 +478,11 @@ for data in [mask_path, *feature_paths]:
 #
 
 # %% [markdown]
-# The bounds of the area of interest can be determined in three ways: 
+# The bounds of the area of interest can be determined in three ways:
 #
 # 1. DEFAULT: The bounds will be determined by a **concave hull polygon** of the mask data.
 # 2. Automatic determination of the **total bounds** (rectangle that encompasses all mask polygons). For more information, please see the [documentation](https://geopandas.org/en/stable/docs/reference/api/geopandas.GeoSeries.total_bounds.html).
-# 3. Upload a custom area definition in the form of a vector file. 
+# 3. Upload a custom area definition in the form of a vector file.
 
 # %%
 # select bounds determination method
@@ -542,7 +540,7 @@ else:
 # The bounds will be plotted on a basemap (if available) for reference. Specifically, Esri's National Geographic World Map will be used.
 #
 # - The bounds will be plotted as a blue polygon.
-# - The masks will be plotted in red for reference. 
+# - The masks will be plotted in red for reference.
 #
 # A GEOJSON file describing the determined bounds will be saved to the working directory. This file can be used to visualize the bounds in a GIS software such as QGIS or ArcGIS.
 #
@@ -614,7 +612,7 @@ CLASS_WEIGHTS = {0: 1 - ratio, 1: ratio}
 #
 
 # %% [markdown]
-# The tile size is the size of the image patches in `tile_size * tile_size` pixels that will be extracted from the input data. 
+# The tile size is the size of the image patches in `tile_size * tile_size` pixels that will be extracted from the input data.
 #
 # The resolution is automatically determined by the input data, but can be modified.
 #
@@ -654,11 +652,11 @@ widget_layout
 # %% [markdown]
 # ## Select vector file features
 #
-# If you uploaded any features in vector file format, you will be prompted to select which features to use. Vector files may include multiple features, which will need to be encoded as separate bands in the composite/stacked raster used to train the model. If you don't select any features, the function will default to selecting the first feature it finds in the first vector file it searches. 
+# If you uploaded any features in vector file format, you will be prompted to select which features to use. Vector files may include multiple features, which will need to be encoded as separate bands in the composite/stacked raster used to train the model. If you don't select any features, the function will default to selecting the first feature it finds in the first vector file it searches.
 #
 # It is recommended that you only select the most relevant features to reduce the time and space complexity of the model (how long and how much memory it takes to run). Additionally, too many inputs may cloud the model's ability to learn the relationship between the inputs and the mask.
 #
-# > Note that this is not relevant for raster feature files, which will be processed later. 
+# > Note that this is not relevant for raster feature files, which will be processed later.
 
 # %%
 # select features to train on
@@ -702,7 +700,7 @@ else:
 # %% [markdown]
 # In order for the model to learn from the data, the input feature data will be encoded in raster bands. Therefore, any input features in vector file format will be rasterized using the data resolution selected above.
 #
-# > Note: Depending on the size of your data, this step may take several minutes to run. 
+# > Note: Depending on the size of your data, this step may take several minutes to run.
 
 # %%
 # rasterize masks and selected features if necessary
@@ -866,6 +864,7 @@ cx.add_basemap(tiles_ax, source=cx.providers.Esri.NatGeoWorldMap, crs=CRS)
 # %% [markdown]
 # ### Extract images and masks from tiles
 
+
 # %%
 # reshape the data to be in the correct shape for the model
 def img_reshape(arr):
@@ -881,6 +880,7 @@ X_gen = data_sgd.flow_from_dataframe(tiles_gdf, TILE_SIZE, TILE_SIZE, batch_size
 Y_gen = mask_sgd.flow_from_dataframe(tiles_gdf, TILE_SIZE, TILE_SIZE, batch_size=1)
 
 # n = len(tiles_gdf) # number of tiles
+
 
 # define a function to unpack a generator
 def unpack_gen(gen):
@@ -1374,6 +1374,7 @@ print(f"{time.ctime()}: Batching and parallelization completed.")
 # unet w batch norm & dropout
 reg = tf.keras.regularizers.l1_l2()
 
+
 def double_conv_block(x, n_filters):
     # conv2D then ReLU activation
     x = Conv2D(
@@ -1679,6 +1680,7 @@ class Net(object):
         print(self.input_shape, outputs.shape)
         return tf.keras.Model(inputs=self.inputs, outputs=outputs, name=self.name)
 
+
 # %%
 # todo add widgets for hyperparameter tuning (sliders galore)
 
@@ -1694,6 +1696,7 @@ class Net(object):
 
 
 # select metrics
+
 
 # %%
 def dice_coefficient(y_true, y_pred, smooth=1e-5):
@@ -1768,7 +1771,9 @@ tf.keras.backend.clear_session()
 # tf.config.experimental.set_memory_growth(device='PhysicalDevice', enable=True)
 
 # %%
-tf.keras.utils.plot_model(model, show_shapes=True, to_file=os.path.join(working_dir, "model_architecture.png"))
+tf.keras.utils.plot_model(
+    model, show_shapes=True, to_file=os.path.join(working_dir, "model_architecture.png")
+)
 
 # %% [markdown]
 # ## Training

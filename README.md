@@ -1,4 +1,5 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
 # Geospatial U-Net
 User-friendly tool for processing geospatial data with U-Net
@@ -24,14 +25,14 @@ cd path/to/GeoNet
 
 Ensure that you are running Python 3.6 or higher. You can check your Python version by running:
 ```
-python3 --version 
+python3 --version
 ```
 
 > *You can download the latest python version [here](https://www.python.org/downloads/) or by using a software manager like [Homebrew](https://docs.brew.sh/Installation) (Mac/Linux) or [Chocolately](https://chocolatey.org/why-chocolatey) (Windows).*
 
 ## Create a virtual environment (optional)
 
-It is recommended to create a virtual environment to install GeoNet. This will ensure that the dependencies for GeoNet do not interfere with other Python packages you may have installed. You can create a virtual environment using the steps below. 
+It is recommended to create a virtual environment to install GeoNet. This will ensure that the dependencies for GeoNet do not interfere with other Python packages you may have installed. You can create a virtual environment using the steps below.
 
 *Replace `myenv` with whatever you want to call your virtual environment.*
 
@@ -40,7 +41,7 @@ It is recommended to create a virtual environment to install GeoNet. This will e
 python3 -m venv myenv
 source myenv/bin/activate
 ```
-### Using virtualenv 
+### Using virtualenv
 ```
 pip3 install virtualenv
 virtualenv myenv
@@ -72,5 +73,3 @@ pip3 install -r requirements.txt
 ```
 
 <!-- # Usage -->
-
-
