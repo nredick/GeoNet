@@ -1,8 +1,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
-# Geospatial U-Net
-User-friendly tool for processing geospatial data with U-Net
+# Coming Soon!
+
+An interactive, no-code tool for processing geospatial data with U-Net
 
 # Installation
 
@@ -71,5 +72,3 @@ Next, install the required packages by running the following command.
 ```
 pip3 install -r requirements.txt
 ```
-
-<!-- # Usage -->
