@@ -18,3 +18,4 @@ spectral==0.23.1
 tensorflow==2.13.0
 torch==2.0.1
 tqdm==4.66.1
+pre-commit==3.4.0
