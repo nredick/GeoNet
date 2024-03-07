@@ -201,8 +201,7 @@ Temporary Items
 *.vsix
 
 # custom
-california_data
-chile_data
+data
 deprecated
 experimenting
 models
