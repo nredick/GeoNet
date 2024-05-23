@@ -42,7 +42,6 @@ import shutil
 import time
 import warnings
 from datetime import datetime
-from multiprocessing import Pool
 from pathlib import Path
 
 import alphashape
@@ -168,55 +167,6 @@ def get_windows(window_shape, image_shape):
         yield window.intersection(image_window)
 
 
-# def to_raster(
-#     data_path,
-#     output_path,
-#     feature_id,
-#     pixel_size=PIXEL_SIZE,
-#     dtype="float64",
-#     windows_shape=(1024, 1024),
-# ):
-#     encode(data_path, feature_id)
-
-#     with fio.open(data_path) as features:
-#         crs = features.crs
-#         xmin, ymin, xmax, ymax = features.bounds
-#         transform = rio.Affine.from_gdal(xmin, pixel_size, 0, ymax, 0, -pixel_size)
-#         out_shape = (int((ymax - ymin) / pixel_size), int((xmax - xmin) / pixel_size))
-
-#         with rio.Env(CHECK_DISK_FREE_SPACE="NO"):
-
-#             with rio.open(
-#                 output_path,
-#                 "w",
-#                 height=out_shape[0],
-#                 width=out_shape[1],
-#                 count=1,
-#                 dtype=dtype,
-#                 crs=crs,
-#                 transform=transform,
-#                 tiled=True,
-#                 options=["COMPRESS=LZW"],
-#             ) as raster:
-#                 for window in get_windows(windows_shape, out_shape):
-#                     window_transform = windows.transform(window, transform)
-#                     # can be smaller than windows_shape at the edges
-#                     window_shape = (window.height, window.width)
-#                     window_data = np.zeros(window_shape)
-
-#                     for feature in features:
-#                         value = feature["properties"][f"{feature_id}_encoded"]
-#                         geom = feature["geometry"]
-#                         d = rasterize(
-#                             [(geom, value)],
-#                             all_touched=False,
-#                             out_shape=window_shape,
-#                             transform=window_transform,
-#                         )
-#                         window_data += d  # sum values up
-
-
-#                     raster.write(window_data, window=window, indexes=1)
 def to_raster(
     data_path,
     output_path,
@@ -265,6 +215,7 @@ def to_raster(
                 raster.write(window_data, window=window, indexes=1)
 
 
+# function to find the number closest to n and divisible by m
 def closestDivisibleNumber(n, m):
     if n % m == 0:
         return n
@@ -289,7 +240,7 @@ def crop_center(img, cropx, cropy):
     return img[startx : startx + cropx, starty : starty + cropy]
 
 
-def concave_hull(dataframe, degree=0.001):
+def concave_hull(dataframe):
     """Create a single concave hull of an input GeoPandas DataFrame"""
     flat_list = []
 
@@ -308,7 +259,7 @@ def concave_hull(dataframe, degree=0.001):
     # Create the concave hull
     vertices = [(x, y) for x, y in flat_list]
     # alpha = alphashape.optimizealpha(vertices) / 2
-    hull = alphashape.alphashape(vertices, degree)
+    hull = alphashape.alphashape(vertices, 0.001)
 
     # Create a GeoDataFrame with the concave hull
     result = gpd.GeoDataFrame(geometry=[hull], crs=dataframe.crs)
@@ -388,18 +339,16 @@ torch.manual_seed(SEED)
 # add the paths to your data files
 
 add_features = widgets.Textarea(
-    value="../data/chile_data/2328825_2011-08-13_RE1_3A_Analytic.tif",  # ../data/chile_data/alos_nova_friburgo_5m.tif,
-    # value="../data/california_data/dem.tif,../data/california_data/tri.tif,../data/california_data/slope.tif,../data/california_data/roughness.tif",
-    # value="../data/drumlin_data/lidar.tif",
-    placeholder="File paths (comma-separated)",
+    value="../chile_data/alos_nova_friburgo_5m.tif,../chile_data/2328825_2011-08-13_RE1_3A_Analytic.tif",
+    # value="../california_data/dem.tif,../california_data/tri.tif,../california_data/slope.tif,../california_data/roughness.tif",
+    placeholder="File paths (separated by commas)",
     description="Features:",
     disabled=False,
 )
 
 add_mask = widgets.Textarea(
-    value="../data/chile_data/scars.geojson",
-    # value='../data/califo/rnia_data/landslide_deposits.gpkg',
-    # value="../data/drumlin_data/mask_rasterized.tif",
+    value="../chile_data/scars.geojson",
+    # value='../california_data/landslide_deposits.gpkg',
     placeholder="File path",
     description="Mask:",
     disabled=False,
@@ -433,28 +382,7 @@ for f in add_features.value.split(","):
 # ## Set the No Data Value
 
 # %%
-# check if the data has a nodata value
-# default to the mask nodata value if set
-# otherwise the first feature nodata value
-# otherwise set to 0
-nodata = 0
-
-if mask_path.endswith(".tif"):
-    for path in [mask_path, *feature_paths]:
-        with rio.open(path) as src:
-            try:
-                nodata = src.nodata
-            except:
-                nodata = 0
-
-            print(f"{time.ctime()}: {path} has a nodata value of {nodata}.")
-
-            if path == mask_path:
-                mask_nodata = nodata
-            else:
-                feature_nodata = nodata
-
-select_nodata = widgets.IntText(value=nodata, description="No-data:", disabled=False)
+select_nodata = widgets.IntText(value=65535, description="no_data:", disabled=False)
 
 select_nodata
 
@@ -554,7 +482,7 @@ for data in [mask_path, *feature_paths]:
 # %% [markdown]
 # The bounds of the area of interest can be determined in three ways:
 #
-# 1. DEFAULT: The bounds will be determined by a **concave hull polygon** of the mask data. Note that only works if your mask data is provided in the form of a vector file.
+# 1. DEFAULT: The bounds will be determined by a **concave hull polygon** of the mask data.
 # 2. Automatic determination of the **total bounds** (rectangle that encompasses all mask polygons). For more information, please see the [documentation](https://geopandas.org/en/stable/docs/reference/api/geopandas.GeoSeries.total_bounds.html).
 # 3. Upload a custom area definition in the form of a vector file.
 
@@ -568,59 +496,43 @@ select_bounds_method = widgets.Dropdown(
 
 select_bounds_method
 
-from rasterio.features import shapes
-
 # %%
 # calculate the bounds
-from rasterio.plot import show
-from shapely.geometry import shape
 
-if select_bounds_method.value == options[3]:
-    # create a widget to select custom bounds
-    upload_bounds = widgets.Text(  # todo remove default value
-        value="../data/drumlin_data/bounds.geojson",
-        description="Bounds:",
-        disabled=False,
+mask_polygons = gpd.read_file(mask_path)
+if select_bounds_method.value == options[0]:
+    # concave hull of the mask region
+    bounds_gpd = concave_hull(mask_polygons)
+
+    # rectangular max bounds of the mask region (for cropping)
+    total_bounds = mask_polygons.total_bounds
+    total_bounds_poly = box(*total_bounds)
+    total_bounds_gs = gpd.GeoSeries(total_bounds_poly, crs=CRS)
+
+elif select_bounds_method.value == options[1]:
+    # convex hull of the mask region
+    convex_hull = mask_polygons[mask_polygons.is_valid].unary_union.convex_hull
+    bounds_gpd = gpd.GeoDataFrame(geometry=[convex_hull], crs=CRS)
+
+    # rectangular max bounds of the mask region (for cropping)
+    total_bounds = mask_polygons.total_bounds
+    total_bounds_poly = box(*total_bounds)
+    total_bounds_gs = gpd.GeoSeries(total_bounds_poly, crs=CRS)
+
+elif select_bounds_method.value == options[2]:
+    total_bounds = mask_polygons.total_bounds
+    total_bounds_poly = box(*total_bounds)
+    total_bounds_gs = gpd.GeoSeries(total_bounds_poly, crs=CRS)
+    bounds_gpd = total_bounds_gs
+
+else:
+    # creata a widget to select custom bounds
+    upload_bounds = widgets.Text(
+        value="Enter path...", description="CRS:", disabled=False
     )
 
     # display the widget
     display(upload_bounds)
-
-else:
-    mask_polygons = gpd.read_file(mask_path)
-
-    if select_bounds_method.value == options[0]:
-        # concave hull of the mask region
-        # todo: make the degree of concavity a widget (lower is looser)
-        bounds_gpd = concave_hull(mask_polygons, 0.0001)
-
-        # rectangular max bounds of the mask region (for cropping)
-        total_bounds = mask_polygons.total_bounds
-        total_bounds_poly = box(*total_bounds)
-        total_bounds_gs = gpd.GeoSeries(total_bounds_poly, crs=CRS)
-
-    elif select_bounds_method.value == options[1]:
-        # convex hull of the mask region
-        convex_hull = mask_polygons[mask_polygons.is_valid].unary_union.convex_hull
-        bounds_gpd = gpd.GeoDataFrame(geometry=[convex_hull], crs=CRS)
-
-        # rectangular max bounds of the mask region (for cropping)
-        total_bounds = mask_polygons.total_bounds
-        total_bounds_poly = box(*total_bounds)
-        total_bounds_gs = gpd.GeoSeries(total_bounds_poly, crs=CRS)
-
-    elif select_bounds_method.value == options[2]:
-        total_bounds = mask_polygons.total_bounds
-        total_bounds_poly = box(*total_bounds)
-        total_bounds_gs = gpd.GeoSeries(total_bounds_poly, crs=CRS)
-        bounds_gpd = total_bounds_gs
-    else:
-        # throw an error
-        raise Exception("Custom bounds not yet implemented for rasters.")
-
-# save the bounds to a file
-bounds_path = os.path.join(working_dir, "bounds.geojson")
-bounds_gpd.to_file(bounds_path, driver="GeoJSON")
 
 # %% [markdown]
 # ### Visualize the bounds
@@ -639,7 +551,6 @@ bounds_gpd.to_file(bounds_path, driver="GeoJSON")
 # %%
 # plot the bounds
 
-
 # custom bounds
 if select_bounds_method.value == options[2]:
     # read bounds from file
@@ -652,19 +563,10 @@ if select_bounds_method.value == options[2]:
     total_bounds = bounds_gpd.total_bounds
     total_bounds_poly = box(*total_bounds)
 
-    # save the bounds poly to file
-    bounds_gpd = gpd.GeoDataFrame(geometry=[total_bounds_poly], crs=CRS)
-    bounds_gpd.to_file(os.path.join(working_dir, "bounds.geojson"))
 
-    # # save the bounds to file
-    # bounds_gpd.to_file(os.path.join(working_dir, "bounds.geojson"))
-    # print(f'{time.ctime()}: Saved bounds to {os.path.join(working_dir, "bounds.geojson")}')
-elif select_bounds_method.value == options[3]:
-    try:
-        # get the bounds from the widget
-        bounds_gpd = gpd.read_file(upload_bounds.value)
-    except:
-        pass
+# save the bounds to file
+bounds_gpd.to_file(os.path.join(working_dir, "bounds.geojson"))
+print(f'{time.ctime()}: Saved bounds to {os.path.join(working_dir, "bounds.geojson")}')
 
 # plot the bounds
 bounds_ax = bounds_gpd.boundary.plot(figsize=(8, 8))
@@ -676,19 +578,11 @@ bounds_ax.set_title("Bounds")
 bounds_ax.set_xlabel("Longitude")
 bounds_ax.set_ylabel("Latitude")
 
-# add a basemap to the plot
-try:
-    cx.add_basemap(bounds_ax, source=cx.providers.Esri.WorldTopoMap, crs=CRS)
-except:
-    print(f"{time.ctime()}: Failed to add basemap to the plot.")
+# add the masks to the plot
+mask_polygons.plot(ax=bounds_ax, color="red")
 
-try:
-    # add the masks to the plot
-    mask_polygons.plot(ax=bounds_ax, color="red")
-except:
-    # add the raster to the plot
-    with rio.open(mask_path) as src:
-        show(src, ax=bounds_ax, cmap="gray")
+# add a basemap to the plot
+cx.add_basemap(bounds_ax, source=cx.providers.Esri.NatGeoWorldMap, crs=CRS)
 
 # %%
 total_area = bounds_gpd.area[0]
@@ -697,21 +591,11 @@ print(
     f"{time.ctime()}: Total area of the bounds is {total_area:.2f} in square {unit}s."
 )
 
-# calculate the area of the masks
-try:
-    obj_area = mask_polygons.area.sum()
-except:
-    with rio.open(mask_path) as src:
-        # convert to numpy
-        mask = src.read(1)
-
-        # sum where mask is 1
-        obj_area = (mask == 1).sum() * src.res[0] ** 2
-
-print(f"{time.ctime()}: Total area of the masks is {obj_area:.2f} square {unit}s.")
+obj_area = mask_polygons.area.sum()
+print(f"{time.ctime()}: Total area of the mask is {obj_area:.2f} square {unit}s.")
 
 ratio = obj_area / total_area
-print(f"{time.ctime()}: Ratio of masks to bounds is {ratio:.3f}.")
+print(f"{time.ctime()}: Ratio of mask to bounds is {ratio:.3f}.")
 
 CLASS_WEIGHTS = {0: 1 - ratio, 1: ratio}
 
@@ -745,13 +629,17 @@ select_tile_size = widgets.Dropdown(
     disabled=False,
 )
 
-# set the minimum resolution to be the maximum of the minimum resolution and the maximum resolution
-min_res = max(min_res, max_res)
+print("For reference:")
+print(
+    f"{time.ctime()}: Detected minimum (lowest) resolution of {min_res} m from input data."
+)
+print(
+    f"{time.ctime()}: Detected maximum (highest) resolution of {max_res} m from input data."
+)
 
 select_res = widgets.BoundedFloatText(
-    value=min_res,  # defaults to the maximum of the minimum and maximum resolutions
+    # value=0.00010,  # defaults to 10 m
     min=max_res,
-    max=max_res,
     step=0.00001,  # 1 m
     description="Resolution:",
     disabled=False,
@@ -760,36 +648,8 @@ select_res = widgets.BoundedFloatText(
 # combine the widgets into an HBox layout
 widget_layout = widgets.HBox([select_tile_size, select_res])
 
-
-if min_res == max_res:
-    print(
-        f"{time.ctime()}: Detected only one resolution of {min_res} m from input data."
-    )
-    select_res.disabled = True
-
-    display(select_tile_size)
-else:
-    print("For reference:")
-    print(
-        f"{time.ctime()}: Detected minimum (lowest) resolution of {min_res} m from input data."
-    )
-    print(
-        f"{time.ctime()}: Detected maximum (highest) resolution of {max_res} m from input data."
-    )
-
-    select_res = widgets.BoundedFloatText(
-        # value=0.00010,  # defaults to 10 m
-        min=max_res,
-        step=0.00001,  # 1 m
-        description="Resolution:",
-        disabled=False,
-    )
-
-    # combine the widgets into an HBox layout
-    widget_layout = widgets.HBox([select_tile_size, select_res])
-
-    # display the layout
-    widget_layout
+# display the layout
+widget_layout
 
 # %% [markdown]
 # ## Select vector file features
@@ -805,12 +665,10 @@ else:
 
 # set tile & pixel size from widget selections
 TILE_SIZE = select_tile_size.value
-# PIXEL_SIZE = select_res.value
-PIXEL_SIZE = 2
+PIXEL_SIZE = select_res.value
 
 all_col = []
 
-# todo : improve this method instead of forcing an error on tiff files
 for path in feature_paths:
     # print(path, feature)
     feature = Path(os.path.basename(path)).stem
@@ -818,8 +676,7 @@ for path in feature_paths:
         gdf = gpd.read_file(path)
         all_col.extend([f"{feature}: {n}" for n in gdf.columns])
         all_col.remove(f"{feature}: geometry")
-    except Exception as e:
-        # print(f"{time.ctime()}: {e}")
+    except:
         print(
             f"{time.ctime()}: Feature input {path} is already a raster file, no features need to be extracted."
         )
@@ -845,32 +702,23 @@ else:
 # %% [markdown]
 # In order for the model to learn from the data, the input feature data will be encoded in raster bands. Therefore, any input features in vector file format will be rasterized using the data resolution selected above.
 #
-# > Note: Depending on the size of your data, this step may take several minutes to run. In the case of large datasets, it may be more efficient to rasterize the data in a GIS software such as QGIS or ArcGIS and upload the rasterized data.
+# > Note: Depending on the size of your data, this step may take several minutes to run.
 
 # %%
 # rasterize masks and selected features if necessary
-
-# rasterize masks if necessary
 try:
-    print(f"{time.ctime()}: Attempting to rasterize {mask_path}...")
     gdf = gpd.read_file(mask_path)
-    # old_path = mask_path
-    # mask_path = os.path.join(working_dir, "mask.tif")
-    gdf["encoding_key"] = 1
-    os.remove(mask_path)
-    gdf.to_file(mask_path)
-    to_raster(
-        mask_path,
-        os.path.join(working_dir, "mask.tif"),
-        feature_id="encoding_key",
-        pixel_size=select_res.value,
-        windows_shape=(2064, 2064),
-    )
+    old_path = mask_path
     mask_path = os.path.join(working_dir, "mask.tif")
+    gdf["encoding_key"] = 1
+    os.remove(old_path)
+    gdf.to_file(old_path)
+    to_raster(
+        old_path, mask_path, feature_id="encoding_key", pixel_size=select_res.value
+    )
 except:
     print(f"{time.ctime()}: {mask_path} is already a raster file.")
 
-# %%
 # get the feature_ids for the features that need to be turned into bands
 keeping = [re.findall(r"\s(.*)", s) for s in to_keep.value]
 keeping = list(itertools.chain.from_iterable(keeping))
@@ -892,7 +740,6 @@ for feature_path in feature_paths:
                     os.path.join(working_dir, fn),
                     feature_id=feature,
                     pixel_size=PIXEL_SIZE,
-                    windows_shape=(4084, 4084),
                 )
                 band_paths.append(os.path.join(working_dir, fn))
                 print(
@@ -939,7 +786,7 @@ with rasterio.open(mask_path) as mask_ds:
 
 # crop to bounds and save to working directory
 band_paths_list = es.crop_all(
-    [mask_path, *band_paths], working_dir, bounds_gpd, overwrite=True
+    [mask_path, *band_paths], working_dir, total_bounds_gs, overwrite=True
 )
 
 # build a list describing the bands to be stacked in the composite image
@@ -1002,7 +849,7 @@ data_sgd = SpatialDataGenerator(source=stack_path, interleave="pixel")
 tile_bounds_gdf = mask_sgd.regular_grid(TILE_SIZE, TILE_SIZE, overlap=0, units="pixels")
 
 # create a geodataframe of the bounds of the mask
-tiles_gdf = tile_bounds_gdf[tile_bounds_gdf.within(bounds_gpd.unary_union)].copy()
+tiles_gdf = tile_bounds_gdf[tile_bounds_gdf.intersects(bounds_gpd.unary_union)].copy()
 
 # print the number of tiles created
 print(f"{time.ctime()}: Created {len(tiles_gdf)} tiles size {TILE_SIZE}x{TILE_SIZE}.")
@@ -1018,19 +865,13 @@ tiles_ax.set_xlabel("Longitude")
 tiles_ax.set_ylabel("Latitude")
 
 # plot the mask polygons underneath the tiles
-try:
-    # add the masks to the plot
-    mask_polygons.plot(ax=tiles_ax, color="red", edgecolor="red")
-except:
-    # add the raster to the plot
-    with rio.open(mask_path) as src:
-        show(src, ax=tiles_ax, cmap="gray")
+mask_polygons.plot(ax=tiles_ax, color=None, edgecolor="red")
 
 # plot the bounds of the area of interest
 bounds_gpd.boundary.plot(ax=tiles_ax, color=None, linewidth=2)
 
 # add a basemap to the plot
-cx.add_basemap(tiles_ax, source=cx.providers.Esri.WorldTopoMap, crs=CRS)
+cx.add_basemap(tiles_ax, source=cx.providers.Esri.NatGeoWorldMap, crs=CRS)
 
 
 # %% [markdown]
@@ -1078,6 +919,60 @@ Y = np.where(Y > 0, 1, 0)  # binarize the mask
 # np.unique(Y)
 
 # %% [markdown]
+# ## Data Visualization
+#
+# Check to make sure things look good visually
+#
+
+# %%
+# create three dropdowns to select the band to display
+options = list(BANDS.keys())
+options.insert(0, "None")
+band1 = widgets.Dropdown(options=options, description="Band 1")
+band2 = widgets.Dropdown(options=options, description="Band 2")
+band3 = widgets.Dropdown(options=options, description="Band 3")
+
+# display the dropdowns in boxes
+b = widgets.VBox([band1, band2, band3])
+display(b)
+
+# %%
+bands = []
+for c in b.children:
+    if c.value != "None":
+        bands.append(BANDS[c.value])
+
+r = 3
+if not len(bands) == 0:
+    n = np.random.randint(0, len(X), r)
+
+    # plot r random tiles in separate images
+    for i in range(r):
+        spectral.imshow(
+            X[n[i], ...],
+            bands=bands,
+            stretch=True,
+            title=f"Tile {n[i]} with Bands {bands}",
+            figsize=(3, 3),
+        )
+
+# %%
+# display 10 random images with their masks
+fig = plt.figure(figsize=(16, 16))
+for i in range(5):
+    n = np.random.randint(0, len(X))
+
+    # mask
+    ax = fig.add_subplot(1, 5, i + 1)
+    ax.imshow(Y[n, :, :, 0], cmap="Greys_r")
+    ax.set_title(f"Mask {n}")
+
+    # image
+    ax = fig.add_subplot(2, 5, i + 1)
+    ax.imshow(X[n, :, :, 3], cmap="viridis")
+    ax.set_title(f"Image {n}")
+
+# %% [markdown]
 # ## Normalize Data
 
 # %%
@@ -1110,63 +1005,6 @@ X_norm = normalize_images(X)
 print(
     f"{time.ctime()}: Completed per-channel, per-image normalization of {len(X_norm)} images."
 )
-
-# %% [markdown]
-# ## Data Visualization
-#
-# Check to make sure things look good visually
-#
-
-# %%
-# create three dropdowns to select the band to display
-options = list(BANDS.keys())
-options.insert(0, "None")
-band1 = widgets.Dropdown(options=options, description="Band 1")
-band2 = widgets.Dropdown(options=options, description="Band 2")
-band3 = widgets.Dropdown(options=options, description="Band 3")
-
-# display the dropdowns in boxes
-b = widgets.VBox([band1, band2, band3])
-display(b)
-
-# %%
-bands = []
-for c in b.children:
-    if c.value != "None":
-        bands.append(BANDS[c.value])
-
-r = 5
-if not len(bands) == 0:
-    n = np.random.randint(0, len(X), r)
-
-    # plot r random tiles in separate images
-    for i in range(r):
-        spectral.imshow(
-            X[n[i], ...],
-            bands=bands,
-            stretch=True,
-            title=f"Tile {n[i]} with Bands {bands}",
-            figsize=(3, 3),
-        )
-
-# %%
-num_channels = X.shape[-1]  # get the number of channels in the input data
-num_images = 5  # number of random images to display
-
-fig = plt.figure(figsize=(14, 7))
-for i in range(num_images):
-    n = np.random.randint(0, len(X))
-
-    ax = fig.add_subplot(2, num_images, i + 1)
-    ax.imshow(Y[n, :, :, 0], cmap="Greys_r")
-    ax.set_title(f"Mask {n}")
-
-    # images
-    # for j in range(num_channels):
-    ax = fig.add_subplot(2, num_images, num_images + i + 1)
-    ax.imshow(X[n, :, :, 0], cmap="viridis")
-    ax.set_title(f"Img. {n}")
-
 
 # %% [markdown]
 # ## Split Data & Set Parameters
@@ -1229,7 +1067,7 @@ select_epochs = widgets.IntSlider(
 # should be a factor of 2 to take advantage of the GPU resources
 select_batch_size = widgets.Dropdown(
     options=[8, 16, 32, 64, 128],
-    value=16,
+    value=32,
     description="Batch Size:",
     disabled=False,
 )
@@ -1577,7 +1415,7 @@ def downsample_block(x, n_filters):
     f = double_conv_block(x, n_filters)  # feature map
     f = BatchNormalization()(f)  # batch normalization
     p = MaxPool2D(2)(f)  # pooled feature map
-    p = Dropout(0.2)(p)  # dropout
+    p = Dropout(0.3)(p)  # dropout
 
     return f, p
 
@@ -1596,7 +1434,7 @@ def upsample_block(x, conv_features, n_filters):
     # concatenate
     x = concatenate([x, conv_features])
     # dropout
-    x = Dropout(0.2)(x)
+    x = Dropout(0.3)(x)
     # Conv2D twice with ReLU activation
     x = double_conv_block(x, n_filters)
     # batch normalization
@@ -1808,6 +1646,11 @@ class Net(object):
         # x = self.residual_block(x)
         return x
 
+    def bridge_block(self, inputs):
+        x = self.pyramid_pooling_block(inputs)
+        # x = self.pyramid_pooling_block(x)
+        return x
+
     def build(self):
         # input block - inc to initial desired filter size
         x = self.inputs
@@ -1869,10 +1712,6 @@ class Net(object):
 
 
 # %%
-import tensorflow as tf
-from tensorflow.keras.losses import BinaryCrossentropy
-
-
 def dice_coefficient(y_true, y_pred, smooth=1e-5):
     y_true = tf.cast(y_true, tf.float32)
     y_pred = tf.cast(y_pred, tf.float32)
@@ -1900,458 +1739,7 @@ def weighted_dice_loss(class_proportions):
     return loss
 
 
-def focal_loss(gamma=2.0, alpha=0.25):
-    def focal_loss_fixed(y_true, y_pred):
-        # Convert labels to tensors
-        y_true = tf.convert_to_tensor(y_true, tf.float32)
-        y_pred = tf.convert_to_tensor(y_pred, tf.float32)
-
-        # Calculate binary crossentropy
-        binary_cross_entropy = BinaryCrossentropy()(y_true, y_pred)
-
-        # Calculate focal loss
-        p_t = (y_true * y_pred) + ((1 - y_true) * (1 - y_pred))
-        modulating_factor = tf.pow(1.0 - p_t, gamma)
-        focal_loss = modulating_factor * binary_cross_entropy
-
-        # Apply class balancing
-        weighted_focal_loss = alpha * focal_loss
-
-        return tf.reduce_mean(weighted_focal_loss)
-
-    return focal_loss_fixed
-
-
 # %%
-from torch.utils.data import DataLoader, TensorDataset
-
-# Convert numpy arrays to tensors with permuted dimensions (N, C, H, W)
-X_train_tensor = torch.from_numpy(X_train).permute(0, 3, 1, 2)
-Y_train_tensor = torch.from_numpy(Y_train).permute(0, 3, 1, 2)
-
-# Create a TensorDataset
-train_dataset = TensorDataset(X_train_tensor, Y_train_tensor)
-
-# Create a train dataloader
-train_dataloader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
-
-# print shapes
-print("X_train_tensor:", X_train_tensor.shape)
-print("Y_train_tensor:", Y_train_tensor.shape)
-
-# repeat for validation data loader
-X_val_tensor = torch.from_numpy(X_val).permute(0, 3, 1, 2)
-Y_val_tensor = torch.from_numpy(Y_val).permute(0, 3, 1, 2)
-
-val_dataset = TensorDataset(X_val_tensor, Y_val_tensor)
-
-val_dataloader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=True)
-
-print("\nX_val_tensor:", X_val_tensor.shape)
-print("Y_val_tensor:", Y_val_tensor.shape)
-
-# repeat for test data loader
-X_test_tensor = torch.from_numpy(X_test).permute(0, 3, 1, 2)
-Y_test_tensor = torch.from_numpy(Y_test).permute(0, 3, 1, 2)
-
-test_dataset = TensorDataset(X_test_tensor, Y_test_tensor)
-test_dataloader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=True)
-
-print("\nX_test_tensor:", X_test_tensor.shape)
-print("Y_test_tensor:", Y_test_tensor.shape)
-
-
-# %%
-import torch
-import torch.nn as nn
-
-
-class UNet(nn.Module):
-    def __init__(self, in_channels, out_channels, filters=32):
-        super(UNet, self).__init__()
-        self.float()
-
-        # Encoder
-        self.encoder = nn.Sequential(
-            nn.Conv2d(in_channels, filters, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(filters, filters, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(filters, filters, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(kernel_size=2, stride=2),
-        )
-
-        # Decoder
-        self.decoder = nn.Sequential(
-            nn.Conv2d(filters, filters, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(filters, filters, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(filters, filters, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True),
-            nn.ConvTranspose2d(filters, out_channels, kernel_size=2, stride=2),
-            nn.Sigmoid(),  # function
-        )
-
-    def forward(self, x):
-        x1 = self.encoder(x)
-        x2 = self.decoder(x1)
-        return x2
-
-
-# %%
-# Define Focal Loss function
-class FocalLoss(nn.Module):
-    def __init__(self, alpha=1, gamma=2, reduction="mean"):
-        super(FocalLoss, self).__init__()
-        self.alpha = alpha
-        self.gamma = gamma
-        self.reduction = reduction
-
-    def forward(self, inputs, targets):
-        BCE_loss = nn.BCEWithLogitsLoss(reduction="none")(inputs, targets)
-        pt = torch.exp(-BCE_loss)
-        focal_loss = self.alpha * (1 - pt) ** self.gamma * BCE_loss
-
-        if self.reduction == "mean":
-            return torch.mean(focal_loss)
-        elif self.reduction == "sum":
-            return torch.sum(focal_loss)
-        else:
-            return focal_loss
-
-
-def intersection_over_union(predicted, target, epsilon=1e-8):
-    intersection = (predicted * target).sum(
-        dim=(1, 2)
-    )  # Calculate the intersection for each sample
-    union = (predicted + target).sum(
-        dim=(1, 2)
-    ) - intersection  # Calculate the union for each sample
-
-    iou = (intersection + epsilon) / (
-        union + epsilon
-    )  # Calculate IoU for each sample, adding epsilon to avoid division by zero
-
-    # Return the mean IoU across all samples
-    return iou.mean()
-
-
-# %%
-import torch.nn as nn
-import torch.optim as optim
-from ignite.engine import Engine, Events
-
-# Assuming you already have your model defined
-in_channels = X_train_tensor.shape[1]
-model = UNet(in_channels, 1)
-
-# print(model)
-
-# Define loss function and optimizer
-# criterion = FocalLoss()
-# criterion = nn.BCEWithLogitsLoss()
-criterion = nn.BCELoss()
-optimizer = optim.Adam(model.parameters(), lr=1e-4)  # You can adjust the learning rate
-threshold = 0.5
-
-EPOCHS = 5
-
-print(model)
-
-# %%
-import torch
-from ignite.engine import Engine, Events, create_supervised_evaluator
-from ignite.handlers import EarlyStopping, ModelCheckpoint
-from ignite.metrics import Accuracy, IoU, Loss, Precision, Recall
-from torch.utils.data import DataLoader
-
-# # Assuming you have a dataset class named 'YourDataset' and the train and validation datasets are initialized
-# train_dataset = YourDataset(train=True)
-# val_dataset = YourDataset(train=False)
-
-# # Assuming you have a DataLoader for each dataset
-# train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=os.cpu_count(), train=True)
-# val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=os.cpu_count(), train=False)
-
-# Assuming you already have your model defined
-in_channels = X_train_tensor.shape[1]
-model = UNet(in_channels, 1)
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-model.to(device)
-
-# Define loss function and optimizer
-criterion = nn.BCELoss()
-optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
-
-
-# Define your Ignite engine functions for training and validation
-def update_model(engine, batch):
-    model.train()
-    optimizer.zero_grad()
-    x, y = batch
-    x, y = x.to(device), y.to(device)
-    y_pred = model(x)
-    # y_pred = (y_pred > 0.5).float()
-    loss = criterion(y_pred, y.float())
-    loss.backward()
-    optimizer.step()
-    return loss.item()
-
-
-def evaluate_model(engine, batch):
-    model.eval()
-    with torch.no_grad():
-        x, y = batch
-        x, y = x.to(device), y.to(device)
-        y_pred = model(x)
-        return y_pred, y
-
-
-# Create the Ignite engines
-trainer = Engine(update_model)
-evaluator = create_supervised_evaluator(
-    model,
-    metrics={
-        "accuracy": Accuracy(),
-        "loss": Loss(criterion),
-        # 'iou': IoU(),
-        "precision": Precision(),
-        "recall": Recall(),
-    },
-    device=device,
-)
-
-
-# Attach handlers for metrics computation
-@trainer.on(Events.ITERATION_COMPLETED(every=BATCH_SIZE // 5))
-def log_training_loss(engine):
-    print(
-        "Epoch[{}] Iteration[{}]: Loss: {:.4f}".format(
-            engine.state.epoch, engine.state.iteration, engine.state.output
-        )
-    )
-
-
-@trainer.on(Events.EPOCH_COMPLETED)
-def log_epoch_results(engine):
-    evaluator.run(val_dataloader)
-    metrics = evaluator.state.metrics
-    print(
-        "Validation Results - Epoch: {}  Avg accuracy: {:.4f}  Avg loss: {:.4f}  Avg Precision: {:.4f}  Avg Recall: {:.4f}".format(
-            engine.state.epoch,
-            metrics["accuracy"],
-            metrics["loss"],
-            metrics["precision"],
-            metrics["recall"],
-        )
-    )
-
-
-# Attach ModelCheckpoint and EarlyStopping handlers
-checkpoint_handler = ModelCheckpoint(
-    dirname="checkpoints",
-    filename_prefix="unet_checkpoint",
-    n_saved=3,
-    require_empty=False,
-)
-trainer.add_event_handler(Events.EPOCH_COMPLETED, checkpoint_handler, {"model": model})
-early_stopping_handler = EarlyStopping(
-    patience=2,
-    score_function=lambda engine: -engine.state.metrics["loss"],
-    trainer=trainer,
-)
-evaluator.add_event_handler(Events.COMPLETED, early_stopping_handler)
-
-# Run the training loop
-trainer.run(train_dataloader, max_epochs=EPOCHS)
-
-
-# %%
-def train_step(engine, batch):
-    x, y = batch
-    # x = x.to(device)
-    # y = y.to(device)
-
-    model.train()
-    y_pred = model(x)
-    loss = criterion(y_pred, y.float())
-
-    optimizer.zero_grad()
-    loss.backward()
-    optimizer.step()
-
-    binary_predictions = (y_pred > 0.5).float()
-
-    return {"y_pred": binary_predictions, "y": y, "loss": loss.item()}
-
-
-def validation_step(engine, batch):
-    x, y = batch
-    # x = x.to(device)
-    # y = y.to(device)
-
-    model.eval()
-    with torch.no_grad():
-        y_pred = model(x)
-        loss = criterion(y_pred, y.float())
-        binary_predictions = (y_pred > 0.5).float()
-
-    return {"y_pred": binary_predictions, "y": y, "loss": loss.item()}
-
-
-trainer = Engine(train_step)
-validator = Engine(validation_step)
-
-# define metrics
-from ignite.metrics import Accuracy, Loss
-
-# Accuracy and loss metrics are defined
-metrics = {"accuracy": Accuracy(is_multilabel=False), "loss": Loss(criterion)}
-
-# Attach metrics to the evaluator
-for name, metric in metrics.items():
-    metric.attach(validator, name)
-
-# define evaluators
-from ignite.engine import create_supervised_evaluator
-
-# todo: define checkpoints and early stopping
-from ignite.handlers import EarlyStopping, ModelCheckpoint
-
-train_evaluator = create_supervised_evaluator(model, metrics=metrics)
-validation_evaluator = create_supervised_evaluator(model, metrics=metrics)
-
-
-# define events
-@trainer.on(Events.EPOCH_STARTED)
-def print_epoch(engine):
-    print(f"Epoch: {engine.state.epoch}/{engine.state.max_epochs}")
-
-
-# @trainer.on(Events.ITERATION_COMPLETED(every=BATCH_SIZE//5))
-# def log_batch_metrics(engine):
-#     print(
-#         f'  Batch {engine.state.iteration}/{len(train_dataloader)} - {", ".join([f"{key} = {value:.4f}" for key, value in metrics.items()])}'
-#     )
-
-# @trainer.on(Events.EPOCH_COMPLETED)
-# def log_epoch_metrics(engine):
-#     train_evaluator.run(train_dataloader)
-#     metrics_output = train_evaluator.state.metrics
-#     print(
-#         f'Training Results - {", ".join([f"{key} = {value:.4f}" for key, value in metrics_output.items()])}'
-#     )
-
-#     validation_evaluator.run(val_dataloader)
-#     metrics_output = validation_evaluator.state.metrics
-#     print(
-#         f'Validation Results - {", ".join([f"{key} = {value:.4f}" for key, value in metrics_output.items()])}'
-#     )
-
-# ### ALT
-
-# @trainer.on(Events.ITERATION_COMPLETED(every=BATCH_SIZE//5))
-# def log_batch_metrics(engine):
-#     print(
-#         f'  Batch {engine.state.iteration}/{len(train_dataloader)} - ' +
-#         f'Accuracy = {metrics["accuracy"].compute():.4f}, ' +
-#         f'Loss = {metrics["loss"].compute():.4f}'
-# )
-
-
-@trainer.on(Events.EPOCH_COMPLETED)
-def log_epoch_metrics(engine):
-    train_evaluator.run(train_dataloader)
-    metrics_output = train_evaluator.state.metrics
-    print(
-        f"Training Results - "
-        + f'Accuracy = {metrics_output["accuracy"]:.4f}, '
-        + f'Loss = {metrics_output["loss"]:.4f}'
-    )
-
-    validation_evaluator.run(val_dataloader)
-    metrics_output = validation_evaluator.state.metrics
-    print(
-        f"Validation Results - "
-        + f'Accuracy = {metrics_output["accuracy"]:.4f}, '
-        + f'Loss = {metrics_output["loss"]:.4f}'
-    )
-
-
-# train the model
-trainer.run(train_dataloader, max_epochs=EPOCHS)
-
-
-# %%
-# define the training function
-def update_fn(engine, batch):
-    # set model to training mode
-    model.train()
-    optimizer.zero_grad()
-
-    # unpack the batch
-    inputs, targets = batch
-    outputs = model(inputs.float())
-
-    # calculate loss
-    loss = criterion(outputs, targets.float())
-    loss.backward()
-    optimizer.step()
-
-    return {"y_pred": outputs, "y": targets, "loss": loss.item()}
-
-
-trainer = Engine(update_fn)
-
-# Attach running average metrics to the trainer
-metrics = ["loss", "iou"]  # , "precision"]  # , "precision", "recall", "F1"]
-
-
-# print that the epoch has started
-@trainer.on(Events.EPOCH_STARTED)
-def print_epoch(engine):
-    print(f"Epoch {engine.state.epoch}/{engine.state.max_epochs}:")
-
-
-# Print batch metrics
-@trainer.on(Events.ITERATION_COMPLETED(every=15))
-def log_training_metrics(engine):
-    metrics = engine.state.metrics
-
-    # print all metrics on same line determined from metrics using loop
-    print(
-        f'  Batch {engine.state.iteration}/{len(train_dataloader)} - {", ".join([f"{key} = {value:.4f}" for key, value in metrics.items()])}'
-    )
-
-
-# Print average loss and IoU for the epoch
-@trainer.on(Events.EPOCH_COMPLETED)
-def log_epoch_results(engine):
-    # print epoch num and metrics
-    metrics = engine.state.metrics
-
-    # print all metrics on same line determined from metrics using loop
-    print(
-        f'Epoch {engine.state.epoch}/{engine.state.max_epochs} - {", ".join([f"{key} = {value:.4f}" for key, value in metrics.items()])}'
-    )
-
-
-# Run the trainer for the specified number of epochs
-trainer.run(train_dataloader, max_epochs=EPOCHS)
-
-# %%
-assert 1 == 0
-
-# %%
-# tf.keras.utils.plot_model(
-#     model, show_shapes=False, to_file=os.path.join(working_dir, "model_architecture.png")
-# )
-
-# %%
-import tensorflow as tf
-
 # define model parameters
 # BATCH_SIZE = 32
 INPUT_SHAPE = (TILE_SIZE, TILE_SIZE, band_count)  # X.shape[-1])
@@ -2359,19 +1747,19 @@ INPUT_SHAPE = (TILE_SIZE, TILE_SIZE, band_count)  # X.shape[-1])
 # compile model
 
 # IF BINARY SEG, OUTPUT_CHANNELS = 1
-# model = build_unet(input_shape=INPUT_SHAPE, output_channels=1, base_filters=32, depth=6)
-model = Net(INPUT_SHAPE, output_channels=1, filters=16, depth=3).build()
+# model = build_model(input_shape=INPUT_SHAPE, output_channels=1, base_filters=64, depth=4)
+model = Net(INPUT_SHAPE, output_channels=1, filters=32, depth=6).build()
 print(f"{time.ctime()}: Model compiled successfully.")
 
 # define metrics
 metrics = [
-    # "accuracy",
+    "accuracy",
     # tf.keras.metrics.Accuracy(),
-    tf.keras.metrics.BinaryAccuracy(),
+    # tf.keras.metrics.BinaryAccuracy(),
     tf.keras.metrics.BinaryIoU(),
-    # dice_coefficient,
-    # tf.keras.metrics.Precision(),
-    # tf.keras.metrics.Recall(),
+    dice_coefficient,
+    tf.keras.metrics.Precision(),
+    tf.keras.metrics.Recall(),
     # tfa.metrics.F1Score(num_classes=1, average='macro', threshold=0.5),
     # tfa.metrics.MatthewsCorrelationCoefficient(num_classes=2, threshold=0.5),
     tf.keras.losses.BinaryCrossentropy(),
@@ -2383,24 +1771,27 @@ metrics = [
 
 class_weights = list(CLASS_WEIGHTS.values())
 
-# Free up RAM in case the model definition cells were run multiple times
-tf.keras.backend.clear_session()
+model.compile(
+    optimizer=tf.keras.optimizers.Adam(learning_rate=1e-3),
+    loss=tf.keras.losses.BinaryFocalCrossentropy(),
+    # loss=weighted_dice_loss(class_weights),
+    # loss_weights=class_weights,
+    metrics=metrics,
+)
 
+# free up RAM in case the model definition cells were run multiple times
+tf.keras.backend.clear_session()
+# tf.config.experimental.set_memory_growth(device='PhysicalDevice', enable=True)
+
+# %%
+tf.keras.utils.plot_model(
+    model, show_shapes=True, to_file=os.path.join(working_dir, "model_architecture.png")
+)
 
 # %% [markdown]
 # ## Training
 
 # %%
-# Compile the model with the learning rate scheduler
-model.compile(
-    optimizer=tf.keras.optimizers.RMSprop(
-        learning_rate=tf.keras.optimizers.schedules.ExponentialDecay(1e-3, 100, 0.96)
-    ),
-    # loss=tf.keras.losses.BinaryFocalCrossentropy(apply_class_balancing=True),
-    loss=tf.keras.losses.BinaryCrossentropy(),
-    metrics=metrics,
-)
-
 # todo add widget for setting output directory for model
 output_dir = os.path.join(working_dir, "models")
 file_name = f"model_{datetime.now()}"
@@ -2409,12 +1800,10 @@ model_path = os.path.join(output_dir, file_name + ".hdf5")
 
 print(f"{time.ctime()}: Model will be saved to {model_path}")
 
-from tensorflow.keras.callbacks import ModelCheckpoint
-
 # set up callbacks
 checkpoint = ModelCheckpoint(
-    filepath=model_path,
-    monitor="val_binary_crossentropy",
+    model_path,
+    monitor="val_loss",
     mode="auto",
     save_best_only=True,
     restore_best_weights=True,
@@ -2427,15 +1816,10 @@ h = tf.keras.callbacks.History()
 
 callbacks = [
     checkpoint,
-    tf.keras.callbacks.EarlyStopping(
-        patience=3, monitor="val_binary_crossentropy", mode="auto"
-    ),
+    tf.keras.callbacks.EarlyStopping(patience=2, monitor="val_loss", mode="auto"),
     tf.keras.callbacks.TensorBoard(log_dir=os.path.join(working_dir, "logs")),
     h,
 ]
-
-# %%
-EPOCHS = 25
 
 # %%
 # print model training details
@@ -2446,36 +1830,20 @@ print(f"Epochs: {EPOCHS}")
 print(f"Batch size: {BATCH_SIZE}")
 print(f"Steps per epoch: {STEPS_PER_EPOCH}")
 print(f"Validation steps: {VALIDATION_STEPS}")
-print(f"Loss function: {model.loss}")
-print(f"Optimizer: {model.optimizer}")
+# print(f"Loss function: {model.loss}")
+# print(f"Optimizer: {model.optimizer}")
 # print(f"Metrics: {model.metrics}")
 
-
 # %%
-# train model
-# import coiled
-# @coiled.function(
-#     cpu=8,
-#     idle_timeout="15s"
-#     # package_sync_ignore=['GDAL', 'alphashape']
-# )
-def train():
-    history = model.fit(
-        X_train,
-        Y_train,
-        # train_ds,  # batch size is determined by the dataset
-        epochs=25,
-        steps_per_epoch=STEPS_PER_EPOCH,
-        # validation_data=valid_ds,
-        validation_data=(X_val, Y_val),
-        validation_steps=VALIDATION_STEPS,
-        callbacks=callbacks,
-        verbose=1,
-    )
-    return history
-
-
-train()
+history = model.fit(
+    train_ds,  # batch size is determined by the dataset
+    epochs=EPOCHS,
+    steps_per_epoch=STEPS_PER_EPOCH,
+    validation_data=valid_ds,
+    validation_steps=VALIDATION_STEPS,
+    callbacks=callbacks,
+    verbose=1,
+)
 
 # %% [markdown]
 # # Results
@@ -2490,8 +1858,8 @@ train()
 best_model = tf.keras.models.load_model(
     model_path,
     custom_objects={
-        # "loss": weighted_dice_loss(class_weights),
-        # "dice_coefficient": dice_coefficient,
+        "loss": weighted_dice_loss(class_weights),
+        "dice_coefficient": dice_coefficient,
         "BinaryCrossentropy": tf.keras.losses.BinaryCrossentropy(),
     },
 )  #                                        'focal_loss': semseglosses.focal_loss })
